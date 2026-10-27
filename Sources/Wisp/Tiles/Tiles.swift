@@ -3,7 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum TileKind: String, Codable, CaseIterable, Identifiable {
-    case claude, music, calendar, weather, timer, clipboard, shelf, todo, worldClock, system, progress, toggles, fortune, recap
+    case claude, usage, music, calendar, weather, timer, clipboard, shelf, todo, worldClock, system, progress, toggles, fortune, recap, devServers, shortcuts, camera
     var id: String { rawValue }
 
     var title: String {
@@ -22,6 +22,10 @@ enum TileKind: String, Codable, CaseIterable, Identifiable {
         case .toggles: "Switches"
         case .fortune: "Wisp Says"
         case .recap: "Week with Claude"
+        case .usage: "Plan Usage"
+        case .devServers: "Dev Servers"
+        case .shortcuts: "Shortcuts"
+        case .camera: "Mirror"
         }
     }
 
@@ -41,12 +45,16 @@ enum TileKind: String, Codable, CaseIterable, Identifiable {
         case .toggles: "switch.2"
         case .fortune: "quote.bubble"
         case .recap: "chart.bar.xaxis"
+        case .usage: "gauge.with.dots.needle.33percent"
+        case .devServers: "server.rack"
+        case .shortcuts: "square.stack.3d.up"
+        case .camera: "camera"
         }
     }
 
     var defaultSpan: Int {
         switch self {
-        case .claude, .music, .calendar, .clipboard, .todo, .worldClock, .recap: 2
+        case .claude, .music, .calendar, .clipboard, .todo, .worldClock, .recap, .usage, .devServers, .shortcuts: 2
         default: 1
         }
     }
@@ -196,6 +204,10 @@ struct TileContent: View {
         case .toggles: TogglesTile(span: span)
         case .fortune: FortuneTile(span: span)
         case .recap: RecapTile(span: span)
+        case .usage: UsageTile(span: span)
+        case .devServers: DevServersTile(span: span)
+        case .shortcuts: ShortcutsTile(span: span)
+        case .camera: CameraTile(span: span)
         }
     }
 }

@@ -20,7 +20,9 @@ struct WingView: View {
             case .none: Color.clear
             case .mascot: MascotView(size: min(h * 0.92, 30))
             case .claude: claude
+            case .usage: usage
             case .music: musicWing(h)
+            case .lyrics: lyrics
             case .timer: timerWing
             case .clock: clock
             case .battery: battery
@@ -47,6 +49,30 @@ struct WingView: View {
             Image(systemName: "checkmark.circle.fill").foregroundStyle(Mood.happy.color)
         } else {
             Image(systemName: "sparkles").opacity(0.5)
+        }
+    }
+
+    @ViewBuilder private var usage: some View {
+        if let w = hub.usage.fiveHour {
+            HStack(spacing: 4) {
+                Ring(progress: w.percent / 100, color: w.percent >= 80 ? Mood.attention.color : prefs.c.accent, line: 2.5)
+                    .frame(width: 12, height: 12)
+                Text("\(Int(w.percent))%").monospacedDigit()
+            }
+            .help("5-hour limit" + (w.resetsAt.map { ", resets in \($0.timeIntervalSinceNow.short)" } ?? ""))
+        } else {
+            Image(systemName: "gauge.with.dots.needle.33percent").opacity(0.4)
+        }
+    }
+
+    private var lyrics: some View {
+        TimelineView(.periodic(from: .now, by: 0.25)) { tl in
+            Text(LyricsService.shared.current(at: tl.date) ?? "♪")
+                .lineLimit(1).truncationMode(.tail)
+                .foregroundStyle(prefs.c.tintFromArtwork ? (music.tint ?? .white) : .white)
+                .id(LyricsService.shared.current(at: tl.date))
+                .transition(.opacity)
+                .animation(.easeInOut(duration: 0.3), value: LyricsService.shared.current(at: tl.date))
         }
     }
 

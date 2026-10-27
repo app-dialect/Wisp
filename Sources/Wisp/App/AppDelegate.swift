@@ -21,8 +21,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         island.model.openSettings = { [weak self] in self?.openSettings() }
         buddy.onOpenIsland = { [weak self] in self?.island.expand(sticky: true) }
 
+        ClaudeConnector.refreshScriptIfConnected()
         wireClaude()
         wireTimer()
+        wireSystem()
         Hotkeys.shared.handler = { [weak self] action in self?.hotkey(action) }
         Hotkeys.shared.reload()
         ClaudeHub.shared.start()
@@ -62,9 +64,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             if self.prefs.c.celebrate { self.island.model.celebrate() }
         }
+        hub.onNotice = { [weak self] text, symbol, mood in
+            guard let self, !hub.isSnoozed else { return }
+            if mood == .sad || mood == .attention, self.prefs.c.soundOnPermission { Sounds.shared.play(.attention) }
+            self.island.model.show(peek: .init(text: text, symbol: symbol, color: mood.color), for: 5)
+        }
         hub.onFailure = { [weak self] s in
             guard let self, !hub.isSnoozed, !self.island.model.expanded else { return }
             self.island.model.show(peek: .init(text: "A tool failed in \(s.project)", symbol: "exclamationmark.triangle.fill", color: Mood.sad.color), for: 3)
+        }
+    }
+
+    private func wireSystem() {
+        PowerWatcher.shared.onChange = { [weak self] text, symbol, mood in
+            self?.island.model.show(peek: .init(text: text, symbol: symbol, color: mood.color), for: 3)
+        }
+        PowerWatcher.shared.start()
+        DownloadWatcher.shared.onDownload = { [weak self] url in
+            guard let self else { return }
+            if self.prefs.c.downloadsToShelf { ShelfStore.shared.add(url) }
+            self.island.model.show(peek: .init(text: "Downloaded \(url.lastPathComponent)", symbol: "arrow.down.circle.fill", color: Mood.happy.color))
         }
     }
 
@@ -92,6 +111,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         WeatherService.shared.setActive(c.uses(TileKind.weather))
         SystemStats.shared.setActive(c.uses(TileKind.system) || c.uses(WingContent.battery) || c.uses(WingContent.cpu))
         ClipboardService.shared.setActive(c.uses(TileKind.clipboard))
+        DownloadWatcher.shared.setActive(c.downloadAlerts)
+        if !c.lyrics { LyricsService.shared.update(for: nil) } else { LyricsService.shared.update(for: MusicService.shared.track) }
         buddy.setVisible(c.desktopBuddy)
         updateStatusItem(c)
     }
@@ -101,9 +122,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         switch action {
         case .toggleIsland: island.toggle()
         case .claudeTab: island.model.expanded && island.model.tab == .claude ? island.collapse() : island.expand(tab: .claude, sticky: true)
-        case .allow: if let p = hub.pending.first { hub.answer(p.id, .allow) }
+        case .allow:
+            guard let p = hub.pending.first else { return }
+            if p.risk != nil {
+                // Risky requests need the press-and-hold in the notch, never a shortcut.
+                island.expand(tab: nil, sticky: true)
+                island.model.show(peek: .init(text: "Hold Allow in the notch for this one", symbol: "hand.raised.fill", color: Mood.sad.color), for: 3)
+            } else {
+                hub.answer(p.id, .allow)
+            }
         case .deny: if let p = hub.pending.first { hub.answer(p.id, .deny(nil)) }
-        case .always: if let p = hub.pending.first { hub.answer(p.id, .always) }
+        case .always: if let p = hub.pending.first, p.risk == nil { hub.answer(p.id, .always) }
         case .focusTimer: FocusTimer.shared.toggle()
         }
     }

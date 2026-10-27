@@ -51,6 +51,12 @@ struct MusicTile: View {
                         Text(t.title).font(.system(size: 13, weight: .semibold)).lineLimit(1)
                         Text(t.artist).font(.system(size: 11)).foregroundStyle(look.theme.secondary).lineLimit(1)
                         Spacer(minLength: 0)
+                        TimelineView(.periodic(from: .now, by: 0.25)) { tl in
+                            if let line = LyricsService.shared.current(at: tl.date) {
+                                Text(line).font(.system(size: 11, weight: .medium)).foregroundStyle(tint).lineLimit(1)
+                                    .id(line).transition(.opacity)
+                            }
+                        }
                         ProgressView(value: min(t.position, t.duration), total: t.duration)
                             .progressViewStyle(.linear).tint(tint).controlSize(.mini)
                         controls
@@ -480,12 +486,14 @@ struct TogglesTile: View {
     @ObservedObject private var hub = ClaudeHub.shared
     @State private var awake = SystemSwitches.keepingAwake
     @State private var dark = SystemSwitches.isDarkMode
+    @State private var micMuted = MicMute.isMuted
 
     var body: some View {
-        let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: span == 1 ? 2 : 4)
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: span == 1 ? 2 : span == 2 ? 4 : 5)
         LazyVGrid(columns: columns, spacing: 6) {
             toggle("cup.and.saucer.fill", "Awake", awake) { awake.toggle(); SystemSwitches.keepAwake(awake) }
             toggle("circle.lefthalf.filled", "Dark", dark) { dark.toggle(); SystemSwitches.toggleDarkMode() }
+            toggle(micMuted ? "mic.slash.fill" : "mic.fill", "Mic", micMuted) { micMuted.toggle(); MicMute.set(micMuted) }
             toggle("moon.zzz.fill", "Snooze", hub.isSnoozed) { hub.snooze(minutes: hub.isSnoozed ? nil : 30) }
             toggle(prefs.c.soundPack == .off ? "speaker.slash.fill" : "speaker.wave.2.fill", "Sound", prefs.c.soundPack != .off) {
                 prefs.c.soundPack = prefs.c.soundPack == .off ? .chime : .off

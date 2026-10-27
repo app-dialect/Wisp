@@ -17,6 +17,8 @@ final class MusicService: ObservableObject {
         var playing = false
         var player: Player = .music
         var artURL: String = ""
+        /// When `position` was read, so lyrics can follow along between polls.
+        var sampledAt = Date()
     }
 
     @Published private(set) var track: Track?
@@ -98,6 +100,7 @@ final class MusicService: ObservableObject {
 
     private func update(_ t: Track) {
         track = t
+        LyricsService.shared.update(for: t)
         let key = "\(t.player)\(t.title)\(t.album)"
         guard key != lastKey else { return }
         lastKey = key

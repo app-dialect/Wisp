@@ -48,6 +48,15 @@ struct Session: Identifiable, Equatable {
     var transcriptPath: String?
     var turnStarted: Date?
     var agent = ""
+    var tty = ""
+    var tmuxPane = ""
+    var model = ""
+    var contextPercent: Double?
+    var costUSD: Double?
+    /// Tools the person allowed for the rest of this session only. Kept in memory.
+    var sessionAllowed: Set<String> = []
+    /// "Trust this session": every request is allowed until revoked or the session ends.
+    var trusted = false
 
     var project: String {
         let name = URL(fileURLWithPath: cwd).lastPathComponent
@@ -97,6 +106,10 @@ struct PendingPermission: Identifiable {
     let detail: String
     let symbol: String
     let canRemember: Bool
+    /// Why this request is dangerous, if it is. Risky requests need a press-and-hold to allow.
+    let risk: String?
+    /// The plan text, when Claude asks to leave plan mode.
+    let plan: String?
     let created: Date
     let deadline: Date
     let reply: ([String: Any]) -> Void
@@ -191,6 +204,49 @@ enum ToolText {
         let line = s.split(separator: "\n", maxSplits: 1).first.map(String.init) ?? s
         return line.count > 80 ? String(line.prefix(79)) + "…" : line
     }
+}
+
+/// Spots requests worth a second look before allowing.
+enum RiskCheck {
+    private static let patterns: [(String, String)] = [
+        (#"\brm\s+(-[a-zA-Z]*[rf][a-zA-Z]*\s+)+"#, "Deletes files recursively or by force"),
+        (#"\bgit\s+push\b.*(--force\b|-f\b|--force-with-lease)"#, "Force-pushes and can rewrite shared history"),
+        (#"\bgit\s+reset\s+--hard"#, "Throws away uncommitted work"),
+        (#"\bgit\s+clean\s+-[a-zA-Z]*f"#, "Deletes untracked files"),
+        (#"\bgit\s+(checkout|restore)\s+(--\s+)?\.(\s|$)"#, "Discards local changes"),
+        (#"\b(drop|truncate)\s+(table|database|schema)\b"#, "Drops or empties database data"),
+        (#"\bdelete\s+from\s+\w+\s*(;|$)"#, "Deletes every row of a table"),
+        (#"\bsudo\b"#, "Runs as administrator"),
+        (#"\b(curl|wget)\b[^|]*\|\s*(sh|bash|zsh|python)"#, "Pipes a download straight into a shell"),
+        (#"\bchmod\s+(-R\s+)?777\b"#, "Makes files writable by everyone"),
+        (#"\b(mkfs|diskutil\s+erase|dd\s+if=)"#, "Can erase a disk"),
+        (#"\bkill(all)?\s+-9\b"#, "Force-kills processes"),
+        (#"\b(npm|pnpm|yarn)\s+publish\b|\bcargo\s+publish\b|\bgh\s+release\s+create\b"#, "Publishes a release"),
+        (#">\s*/dev/(disk|sd)"#, "Writes to a raw disk"),
+    ]
+
+    static func check(_ tool: String, _ input: [String: Any]) -> String? {
+        if tool == "Bash", let cmd = input["command"] as? String {
+            for (pattern, why) in patterns where cmd.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil {
+                return why
+            }
+        }
+        if ["Edit", "Write", "MultiEdit"].contains(tool), let path = input["file_path"] as? String {
+            let sensitive = [".env", ".ssh/", "id_rsa", ".aws/credentials", ".npmrc", ".netrc", "/etc/", ".git/config"]
+            if let hit = sensitive.first(where: { path.contains($0) }) { return "Touches a sensitive file (\(hit))" }
+        }
+        return nil
+    }
+}
+
+/// Claude plan limits and per-session numbers, read from the status line Claude Code feeds Wisp.
+struct PlanUsage: Equatable {
+    struct Window: Equatable { var percent: Double; var resetsAt: Date? }
+    var fiveHour: Window?
+    var sevenDay: Window?
+    var updated = Date.distantPast
+
+    var isKnown: Bool { fiveHour != nil || sevenDay != nil }
 }
 
 enum LineDiff {

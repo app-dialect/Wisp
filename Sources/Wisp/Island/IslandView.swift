@@ -119,16 +119,17 @@ struct CollapsedView: View {
     var body: some View {
         let c = prefs.c
         let gap = c.style == .notch ? model.notch.width : 70
+        let lyricExtra: CGFloat = MusicService.shared.isPlaying && !LyricsService.shared.lines.isEmpty ? 120 : 0
         HStack(spacing: 0) {
             if wings {
                 WingView(content: c.leftWing, edge: .leading)
-                    .frame(width: c.wingWidth)
+                    .frame(width: c.wingWidth + (c.leftWing == .lyrics ? lyricExtra : 0))
                 Spacer(minLength: gap)
                 if let peek = model.peek {
-                    PeekView(peek: peek).frame(width: c.wingWidth + 70)
+                    PeekView(peek: peek).frame(width: c.wingWidth + 150)
                 } else {
                     WingView(content: c.rightWing, edge: .trailing)
-                        .frame(width: c.wingWidth)
+                        .frame(width: c.wingWidth + (c.rightWing == .lyrics ? lyricExtra : 0))
                 }
             } else if c.style == .floating {
                 Capsule().fill(Color.white.opacity(0.25)).frame(width: 36, height: 4).frame(maxWidth: .infinity)

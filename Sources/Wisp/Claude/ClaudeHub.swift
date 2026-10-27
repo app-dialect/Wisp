@@ -14,6 +14,7 @@ final class ClaudeHub: ObservableObject {
     @Published private(set) var lastDone: (project: String, at: Date)?
     @Published private(set) var lastFailure: Date?
     @Published private(set) var lastActivity = Date()
+    @Published private(set) var usage = PlanUsage()
     @Published var selectedID: String?
     @Published var snoozedUntil: Date?
 
@@ -21,6 +22,11 @@ final class ClaudeHub: ObservableObject {
     var onAttention: (() -> Void)?
     var onDone: ((Session) -> Void)?
     var onFailure: ((Session) -> Void)?
+    /// A short heads-up for the wings: text, SF Symbol, mood for the color.
+    var onNotice: ((String, String, Mood) -> Void)?
+
+    private var usageAlerted: Set<String> = []
+    private var contextAlerted: Set<String> = []
 
     private let server = HookServer(path: Paths.socket)
     private var timers: [String: Timer] = [:]
@@ -81,6 +87,18 @@ final class ClaudeHub: ObservableObject {
             }
             stats.approvals += 1
             addStep(p.sessionID, tool: p.tool, text: "Always allowed \(p.tool)", status: .ok)
+        case .session:
+            sessions[p.sessionID]?.sessionAllowed.insert(p.tool)
+            p.reply(["behavior": "allow"])
+            stats.approvals += 1
+            addStep(p.sessionID, tool: p.tool, text: "Allowed \(p.tool) for this session", status: .ok)
+        case .trust:
+            sessions[p.sessionID]?.trusted = true
+            p.reply(["behavior": "allow"])
+            stats.approvals += 1
+            addStep(p.sessionID, tool: p.tool, text: "Trusted this session: everything is allowed", status: .ok)
+            // Everything else already waiting from this session goes through too.
+            for other in pending where other.sessionID == p.sessionID && other.risk == nil { answer(other.id, .allow) }
         case .deny(let message):
             p.reply(["behavior": "deny", "message": message ?? ""])
             addStep(p.sessionID, tool: p.tool, text: message.map { "Denied: \($0)" } ?? "Denied \(p.summary)", status: .failed)
@@ -93,7 +111,7 @@ final class ClaudeHub: ObservableObject {
         Hotkeys.shared.refreshPending(!pending.isEmpty)
     }
 
-    enum Choice { case allow, always, deny(String?), terminal }
+    enum Choice { case allow, always, session, trust, deny(String?), terminal }
 
     /// `answers` maps each question's text to the chosen label(s); nil hands it to the terminal.
     func answer(question id: String, _ answers: [String: String]?) {
@@ -112,8 +130,25 @@ final class ClaudeHub: ObservableObject {
 
     func focusTerminal(_ sessionID: String) {
         guard let s = sessions[sessionID] else { return }
-        let bundle = s.appBundle.isEmpty ? "com.apple.Terminal" : s.appBundle
-        NSRunningApplication.runningApplications(withBundleIdentifier: bundle).first?.activate()
+        DispatchQueue.global(qos: .userInitiated).async { TerminalBridge.focus(s) }
+    }
+
+    /// Types a reply into the session's terminal tab.
+    func send(_ text: String, to sessionID: String) {
+        guard let s = sessions[sessionID], !text.isEmpty else { return }
+        addStep(sessionID, tool: "You", text: "Sent: " + ToolText.firstLine(text), status: .info)
+        DispatchQueue.global(qos: .userInitiated).async { TerminalBridge.send(text, to: s) }
+    }
+
+    /// Stops auto-allowing for a session that was trusted or had per-session tools.
+    func revokeTrust(_ sessionID: String) {
+        sessions[sessionID]?.trusted = false
+        sessions[sessionID]?.sessionAllowed.removeAll()
+    }
+
+    /// Allows every waiting request that isn't risky.
+    func allowAllSafe() {
+        for p in pending where p.risk == nil { answer(p.id, .allow) }
     }
 
     func clearFinished() {
@@ -143,7 +178,11 @@ final class ClaudeHub: ObservableObject {
             else if s.appBundle.isEmpty, let t = meta["term"] as? String { s.appBundle = Self.bundle(forTerm: t) }
         }
         if let t = e["transcript_path"] as? String { s.transcriptPath = t }
-        if let meta = e["_wisp"] as? [String: Any], let a = meta["agent"] as? String, !a.isEmpty { s.agent = a }
+        if let meta = e["_wisp"] as? [String: Any] {
+            if let a = meta["agent"] as? String, !a.isEmpty { s.agent = a }
+            if let t = meta["tty"] as? String, !t.isEmpty { s.tty = t }
+            if let p = meta["tmux"] as? String, !p.isEmpty { s.tmuxPane = p }
+        }
         let isNew = sessions[id] == nil
         s.lastEvent = now
 
@@ -154,6 +193,10 @@ final class ClaudeHub: ObservableObject {
         }
 
         switch name {
+        case "StatusLine":
+            readStatusLine(e, into: &s)
+            sessions[id] = s
+            return
         case "SessionStart":
             s.phase = .starting
             s.activity = "Ready"
@@ -206,6 +249,7 @@ final class ClaudeHub: ObservableObject {
             s.phase = .done
             s.activity = "Done"
             for i in s.steps.indices where s.steps[i].status == .running { s.steps[i].status = .ok }
+            if let m = e["last_assistant_message"] as? String, !m.isEmpty { s.lastMessage = m }
             finish(s)
         case "SubagentStop":
             s.steps.append(Step(time: now, tool: "Agent", symbol: "person.2", text: "A subagent finished", status: .ok))
@@ -232,7 +276,9 @@ final class ClaudeHub: ObservableObject {
             (r.tool == tool || r.tool == "*") && (r.project.isEmpty || r.project == s.cwd)
                 && (r.pattern.isEmpty || match.hasPrefix(r.pattern))
         }
-        if ruled || (prefs.autoAllowReadOnly && ToolText.isReadOnly(tool)) {
+        let risk = prefs.riskGuard ? RiskCheck.check(tool, input) : nil
+        let sessionOK = s.trusted || s.sessionAllowed.contains(tool)
+        if risk == nil && (ruled || sessionOK || (prefs.autoAllowReadOnly && ToolText.isReadOnly(tool))) {
             reply(["behavior": "allow"])
             addStep(s.id, tool: tool, text: "Auto-allowed \(ToolText.summary(tool, input))", status: .auto)
             return
@@ -245,6 +291,7 @@ final class ClaudeHub: ObservableObject {
             id: token, sessionID: s.id, project: s.project, cwd: s.cwd, tool: tool,
             summary: ToolText.summary(tool, input), detail: ToolText.detail(tool, input),
             symbol: ToolText.symbol(tool), canRemember: !suggestions.isEmpty,
+            risk: risk, plan: tool == "ExitPlanMode" ? input["plan"] as? String : nil,
             created: .now, deadline: Date().addingTimeInterval(timeout), reply: reply)
         pending.append(p)
         sessions[s.id]?.phase = .waiting
@@ -257,6 +304,41 @@ final class ClaudeHub: ObservableObject {
         if !isSnoozed {
             if prefs.soundOnPermission { Sounds.shared.play(.attention) }
             onAttention?()
+        }
+    }
+
+    private func readStatusLine(_ e: [String: Any], into s: inout Session) {
+        func num(_ v: Any?) -> Double? { (v as? NSNumber)?.doubleValue }
+        if let m = (e["model"] as? [String: Any])?["display_name"] as? String { s.model = m }
+        if let ctx = num((e["context_window"] as? [String: Any])?["used_percentage"]) {
+            s.contextPercent = ctx
+            if ctx >= Double(prefs.contextWarn), contextAlerted.insert(s.id).inserted {
+                onNotice?("\(s.project): context \(Int(ctx))% full", "gauge.with.dots.needle.67percent", .attention)
+            } else if ctx < Double(prefs.contextWarn) - 20 {
+                contextAlerted.remove(s.id)   // compacted, warn again next time
+            }
+        }
+        if let cost = num((e["cost"] as? [String: Any])?["total_cost_usd"]) { s.costUSD = cost }
+
+        guard let limits = e["rate_limits"] as? [String: Any] else { return }
+        var u = usage
+        func window(_ key: String) -> PlanUsage.Window? {
+            guard let w = limits[key] as? [String: Any], let pct = num(w["used_percentage"]) else { return nil }
+            return PlanUsage.Window(percent: pct, resetsAt: num(w["resets_at"]).map { Date(timeIntervalSince1970: $0) })
+        }
+        u.fiveHour = window("five_hour") ?? u.fiveHour
+        u.sevenDay = window("seven_day") ?? u.sevenDay
+        u.updated = .now
+        usage = u
+        for (label, w) in [("5-hour", u.fiveHour), ("weekly", u.sevenDay)] {
+            guard let w else { continue }
+            for threshold in [prefs.usageWarn, 95] where w.percent >= Double(threshold) {
+                let key = "\(label)-\(threshold)-\(Int(w.resetsAt?.timeIntervalSince1970 ?? 0))"
+                if usageAlerted.insert(key).inserted {
+                    let reset = w.resetsAt.map { " · resets in \($0.timeIntervalSinceNow.short)" } ?? ""
+                    onNotice?("\(Int(w.percent))% of your \(label) limit\(reset)", "gauge.with.dots.needle.100percent", threshold >= 95 ? .sad : .attention)
+                }
+            }
         }
     }
 

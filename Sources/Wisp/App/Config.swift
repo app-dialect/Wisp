@@ -68,14 +68,16 @@ enum WingMode: String, Codable, CaseIterable, Identifiable {
 }
 
 enum WingContent: String, Codable, CaseIterable, Identifiable {
-    case none, mascot, claude, music, timer, clock, battery, cpu, meeting
+    case none, mascot, claude, usage, music, lyrics, timer, clock, battery, cpu, meeting
     var id: String { rawValue }
     var label: String {
         switch self {
         case .none: "Nothing"
         case .mascot: "Your wisp"
         case .claude: "Claude status"
+        case .usage: "Claude plan usage"
         case .music: "Music"
+        case .lyrics: "Synced lyrics"
         case .timer: "Focus timer"
         case .clock: "Clock"
         case .battery: "Battery"
@@ -273,6 +275,9 @@ struct Config: Codable, Equatable {
     var autoAllowReadOnly = false
     var alwaysTarget: AlwaysTarget = .claude
     var rules: [AllowRule] = []
+    var riskGuard = true
+    var usageWarn = 80
+    var contextWarn = 85
     var quietHours = false
     var quietStart = 22
     var quietEnd = 8
@@ -287,6 +292,12 @@ struct Config: Codable, Equatable {
     var focusMinutes = 25
     var breakMinutes = 5
     var meetingLead = 5
+    var shortcuts: [String] = []
+    var lyrics = true
+    var powerAlerts = true
+    var downloadAlerts = false
+    var downloadsToShelf = true
+    var hideInFullScreen = true
     var todos: [TodoItem] = []
 
     // Sound

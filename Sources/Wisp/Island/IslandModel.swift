@@ -49,7 +49,8 @@ final class IslandModel: ObservableObject {
     }
 
     func collapsedSize(_ c: Config, wings: Bool) -> CGSize {
-        let extra: CGFloat = peek != nil ? 70 : 0
+        var extra: CGFloat = peek != nil ? 150 : 0
+        if c.uses(WingContent.lyrics) && MusicService.shared.isPlaying && !LyricsService.shared.lines.isEmpty { extra += 120 }
         switch c.style {
         case .notch:
             return wings ? CGSize(width: notch.width + 2 * c.wingWidth + extra, height: notch.height)

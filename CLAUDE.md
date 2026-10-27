@@ -18,15 +18,18 @@ You are helping someone change Wisp, a macOS notch app (Swift, AppKit + SwiftUI,
 | The notch silhouette | `Island/IslandShape.swift` |
 | Expanded layout, header, tabs | `Island/IslandView.swift` |
 | What sits beside the camera | `Island/Wings.swift` + `WingContent` in `Config.swift` |
-| Tiles | `Tiles/Tiles.swift` (`TileKind`, edit mode), views in `Tiles/TileViews.swift`, recap in `Tiles/Recap.swift` |
+| Tiles | `Tiles/Tiles.swift` (`TileKind`, edit mode), views in `Tiles/TileViews.swift` and `Tiles/MoreTiles.swift`, recap in `Tiles/Recap.swift` |
 | The mascot (shapes, faces, moods, outfits) | `Mascot/Mascot.swift`: `MascotPainter` draws in a Canvas in a 0…1 unit square; `MoodEngine` picks the mood |
 | Desktop buddy | `Mascot/DesktopBuddy.swift` |
 | Claude Code events, sessions, permissions, questions, stats | `Claude/ClaudeHub.swift` |
 | Tool names → words and icons, diffs, transcript parsing | `Claude/ClaudeModels.swift` |
 | Claude panel, permission card, question card | `Claude/ClaudeViews.swift` |
-| Writing `~/.claude/settings.json` | `Claude/ClaudeConnector.swift` |
+| Writing `~/.claude/settings.json` and `~/.codex/hooks.json`, the status line bridge | `Claude/ClaudeConnector.swift` (`Target.claude`, `Target.codex`) |
+| Risky-command patterns, plan usage model | `RiskCheck` and `PlanUsage` in `Claude/ClaudeModels.swift` |
+| Jumping to and typing into terminal tabs | `Claude/TerminalBridge.swift` |
 | The hook (Python, stdlib only) | `Resources/wisp-hook.py`; socket server in `Claude/HookServer.swift` |
 | Music, calendar, weather, CPU/battery, clipboard, focus timer | `Services/Music.swift`, `Services/LiveData.swift` |
+| Lyrics, power and download heads-ups, Shortcuts, dev servers, mic mute, full screen, camera | `Services/Extras.swift` |
 | Sounds (synthesized) | `Services/Sounds.swift` |
 | Global shortcuts | `Services/Hotkeys.swift` + `HotkeyAction` in `Config.swift` |
 | Settings window, onboarding | `Settings/SettingsView.swift`, `Settings/Onboarding.swift` |
@@ -52,3 +55,4 @@ Add a case to `Outfit` in `Config.swift` (and its `label`), then draw it in `Mas
 - Ask before adding a dependency, a network call or a new macOS permission. Wisp asks for permissions only when a feature needs one.
 - Never write outside Wisp's data folder without showing the change first and keeping a backup (see `ClaudeConnector`).
 - Keep the hook's fallback: if Wisp is closed or doesn't answer, the hook must exit quietly so Claude Code asks in the terminal.
+- Never let a risky request (`PendingPermission.risk`) be allowed by a rule, a shortcut, "Allow all" or session trust.

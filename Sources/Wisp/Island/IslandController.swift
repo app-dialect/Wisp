@@ -34,6 +34,8 @@ final class IslandController {
     private var currentScreen: NSScreen?
     private var bag = Set<AnyCancellable>()
     private var keyMonitor: Any?
+    private var lastFullScreenCheck = Date.distantPast
+    private var hiddenForFullScreen = false
 
     private var prefs: Config { Prefs.shared.c }
 
@@ -167,6 +169,26 @@ final class IslandController {
         return r
     }
 
+    /// Steps aside for full-screen videos, games and slides, unless an agent needs you.
+    /// Returns true while hidden.
+    private func updateFullScreen() -> Bool {
+        let now = Date()
+        if now.timeIntervalSince(lastFullScreenCheck) > 1 {
+            lastFullScreenCheck = now
+            let hide = prefs.hideInFullScreen && !ClaudeHub.shared.needsYou && !model.expanded
+                && currentScreen.map(FullScreen.isActive) == true
+            if hide != hiddenForFullScreen {
+                hiddenForFullScreen = hide
+                NSAnimationContext.runAnimationGroup { ctx in
+                    ctx.duration = 0.25
+                    panel.animator().alphaValue = hide ? 0 : 1
+                }
+            }
+        }
+        if hiddenForFullScreen { panel.ignoresMouseEvents = true }
+        return hiddenForFullScreen
+    }
+
     func wingsShown() -> Bool {
         WingLogic.visible(Prefs.shared.c, model: model)
     }
@@ -175,6 +197,7 @@ final class IslandController {
         if prefs.screen == .mouse, let s = currentScreen, !NSMouseInRect(NSEvent.mouseLocation, s.frame, false) {
             layout()
         }
+        if updateFullScreen() { return }
         guard let rect = visibleRect() else { return }
         let mouse = NSEvent.mouseLocation
         let inside = rect.contains(mouse)
@@ -222,7 +245,7 @@ enum WingLogic {
         if model.peek != nil { return true }
         let hub = ClaudeHub.shared
         if c.claudeEnabled && (hub.needsYou || hub.headline != nil) { return true }
-        if (c.uses(TileKind.music) || c.uses(WingContent.music)) && MusicService.shared.isPlaying { return true }
+        if (c.uses(TileKind.music) || c.uses(WingContent.music) || c.uses(WingContent.lyrics)) && MusicService.shared.isPlaying { return true }
         if (c.uses(TileKind.timer) || c.uses(WingContent.timer)) && FocusTimer.shared.running { return true }
         if c.uses(.meeting), let m = CalendarService.shared.next, m.start.timeIntervalSinceNow < Double(c.meetingLead) * 60, m.end > .now { return true }
         return false

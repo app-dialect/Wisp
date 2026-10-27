@@ -7,6 +7,7 @@ struct ClaudePanel: View {
     @ObservedObject private var hub = ClaudeHub.shared
     @State private var section = 0
     @State private var openFile: String?
+    @State private var reply = ""
 
     var body: some View {
         let sessions = hub.ordered
@@ -48,8 +49,24 @@ struct ClaudePanel: View {
                         HStack(spacing: 7) {
                             PhaseDot(phase: s.phase)
                             VStack(alignment: .leading, spacing: 1) {
+                                HStack(spacing: 4) {
                                 Text(s.project).font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                                if !s.agent.isEmpty {
+                                    Text(s.agent).font(.system(size: 8, weight: .bold)).padding(.horizontal, 4).padding(.vertical, 1)
+                                        .background(Capsule().fill(look.accent.opacity(0.25)))
+                                }
+                            }
                                 Text(s.activity).font(.system(size: 10)).foregroundStyle(look.theme.secondary).lineLimit(1)
+                                if let ctx = s.contextPercent {
+                                    GeometryReader { g in
+                                        Capsule().fill(look.theme.text.opacity(0.1)).overlay(alignment: .leading) {
+                                            Capsule().fill(ctx >= Double(prefs.c.contextWarn) ? Mood.attention.color : look.accent.opacity(0.7))
+                                                .frame(width: g.size.width * min(1, ctx / 100))
+                                        }
+                                    }
+                                    .frame(height: 2.5)
+                                    .help("Context \(Int(ctx))% full")
+                                }
                             }
                             Spacer(minLength: 0)
                         }
@@ -67,8 +84,12 @@ struct ClaudePanel: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 Text(s.project).font(.system(size: 14, weight: .semibold))
-                Text(Date.now.timeIntervalSince(s.startedAt).short + " · \(s.toolCount) tools" + (s.tokensOut > 0 ? " · \((s.tokensIn + s.tokensOut).compact) tok" : ""))
-                    .font(.system(size: 10)).foregroundStyle(look.theme.secondary)
+                Text(meta(s))
+                    .font(.system(size: 10)).foregroundStyle(look.theme.secondary).lineLimit(1)
+                if s.trusted {
+                    Label("Trusted", systemImage: "checkmark.shield.fill").font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(Mood.attention.color).help("Everything is allowed in this session")
+                }
                 Spacer()
                 Picker("", selection: $section) {
                     Text("Steps").tag(0)
@@ -77,7 +98,10 @@ struct ClaudePanel: View {
                 }
                 .pickerStyle(.segmented).labelsHidden().controlSize(.mini).frame(width: 180)
                 Menu {
-                    Button("Open terminal") { hub.focusTerminal(s.id) }
+                    Button("Open terminal tab") { hub.focusTerminal(s.id) }
+                    if s.trusted || !s.sessionAllowed.isEmpty {
+                        Button("Stop auto-allowing in this session") { hub.revokeTrust(s.id) }
+                    }
                     Menu("Snooze alerts") {
                         Button("30 minutes") { hub.snooze(minutes: 30) }
                         Button("1 hour") { hub.snooze(minutes: 60) }
@@ -98,7 +122,29 @@ struct ClaudePanel: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(RoundedRectangle(cornerRadius: 12).fill(look.theme.surface))
+            if TerminalBridge.canSend(s) && !s.isLive {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrowshape.turn.up.left").foregroundStyle(look.theme.secondary)
+                    TextField("Reply to \(s.agent.isEmpty ? "Claude" : s.agent)… (typed into its terminal)", text: $reply)
+                        .textFieldStyle(.plain).font(.system(size: 12))
+                        .onSubmit {
+                            hub.send(reply, to: s.id)
+                            reply = ""
+                        }
+                }
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .background(RoundedRectangle(cornerRadius: 10).fill(look.theme.surface))
+            }
         }
+    }
+
+    private func meta(_ s: Session) -> String {
+        var parts = [Date.now.timeIntervalSince(s.startedAt).short, "\(s.toolCount) tools"]
+        if !s.model.isEmpty { parts.append(s.model) }
+        if let ctx = s.contextPercent { parts.append("ctx \(Int(ctx))%") }
+        if let cost = s.costUSD, cost > 0 { parts.append(String(format: "$%.2f", cost)) }
+        else if s.tokensOut > 0 { parts.append("\((s.tokensIn + s.tokensOut).compact) tok") }
+        return parts.joined(separator: " · ")
     }
 
     private func steps(_ s: Session) -> some View {
@@ -159,8 +205,7 @@ struct ClaudePanel: View {
                     Text("You: " + p).font(.system(size: 11)).foregroundStyle(look.theme.secondary).lineLimit(3)
                 }
                 if let m = s.lastMessage {
-                    Text((try? AttributedString(markdown: m, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(m))
-                        .font(.system(size: 12)).textSelection(.enabled)
+                    MarkdownBlock(text: m).textSelection(.enabled)
                 } else {
                     Text(s.isLive ? "Claude is still working…" : "No reply yet").font(.system(size: 11)).foregroundStyle(look.theme.secondary)
                 }
@@ -225,21 +270,29 @@ struct PermissionCard: View {
     let queued: Int
     @EnvironmentObject private var prefs: Prefs
     @Environment(\.look) private var look
+    @ObservedObject private var hub = ClaudeHub.shared
     @State private var denyNote = ""
     @State private var showNote = false
 
+    private var isPlan: Bool { request.plan != nil }
+
     var body: some View {
-        let hub = ClaudeHub.shared
         let c = prefs.c
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
-                MascotView(size: 40, mood: .attention)
+                MascotView(size: 40, mood: request.risk == nil ? .attention : .sad)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("\(request.project) wants to use \(request.tool)").font(.system(size: 14, weight: .semibold))
+                    Text(isPlan ? "\(request.project) has a plan for you" : "\(request.project) wants to use \(request.tool)")
+                        .font(.system(size: 14, weight: .semibold))
                     Text(queued > 1 ? "1 of \(queued) waiting" : "Claude Code is waiting for you")
                         .font(.system(size: 10)).foregroundStyle(look.theme.secondary)
                 }
                 Spacer()
+                if queued > 1 && hub.pending.contains(where: { $0.risk == nil }) {
+                    Button("Allow all \(hub.pending.filter { $0.risk == nil }.count)") { hub.allowAllSafe() }
+                        .buttonStyle(IslandButton())
+                        .help("Allow every waiting request that isn't flagged as risky")
+                }
                 TimelineView(.periodic(from: .now, by: 0.5)) { tl in
                     let total = request.deadline.timeIntervalSince(request.created)
                     let left = max(0, request.deadline.timeIntervalSince(tl.date))
@@ -251,53 +304,150 @@ struct PermissionCard: View {
                     .help("After this, Claude Code asks in the terminal instead")
                 }
             }
-            ScrollView {
-                Text(request.detail)
-                    .font(.system(size: 11, design: .monospaced))
-                    .textSelection(.enabled)
+
+            if let risk = request.risk {
+                Label(risk, systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10).padding(.vertical, 5)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(8)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Mood.sad.color.opacity(0.85)))
+            }
+
+            ScrollView {
+                Group {
+                    if let plan = request.plan {
+                        MarkdownBlock(text: plan)
+                    } else {
+                        Text(request.detail).font(.system(size: 11, design: .monospaced))
+                    }
+                }
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(8)
             }
             .frame(maxHeight: .infinity)
             .background(RoundedRectangle(cornerRadius: 10).fill(look.theme.text.opacity(0.07)))
 
             if showNote {
-                TextField("Tell Claude what to do instead", text: $denyNote)
+                TextField(isPlan ? "What should Claude change in the plan?" : "Tell Claude what to do instead", text: $denyNote)
                     .textFieldStyle(.plain).font(.system(size: 12))
                     .padding(.horizontal, 10).padding(.vertical, 6)
                     .background(RoundedRectangle(cornerRadius: 8).fill(look.theme.text.opacity(0.08)))
-                    .onSubmit { hub.answer(request.id, .deny(denyNote.isEmpty ? nil : denyNote)) }
+                    .onSubmit { deny() }
             }
             HStack(spacing: 8) {
                 Button { hub.answer(request.id, .terminal) } label: { Image(systemName: "terminal") }
                     .buttonStyle(IslandButton())
                     .help("Answer in the terminal")
-                Button(showNote ? "Send" : "Deny") {
-                    if showNote { hub.answer(request.id, .deny(denyNote.isEmpty ? nil : denyNote)) }
-                    else { hub.answer(request.id, .deny(nil)) }
+                Button(showNote ? "Send" : (isPlan ? "Keep planning" : "Deny")) {
+                    if isPlan && !showNote { showNote = true } else { deny() }
                 }
                 .buttonStyle(IslandButton())
                 .help(c.combo(.deny)?.display ?? "")
-                Button { showNote.toggle() } label: { Image(systemName: "text.bubble") }
-                    .buttonStyle(IslandButton(active: showNote))
-                    .help("Deny and tell Claude why")
-                Spacer()
-                Button("Always") { hub.answer(request.id, .always) }
-                    .buttonStyle(IslandButton())
-                    .help("Allow \(request.tool) from now on · " + (c.combo(.always)?.display ?? ""))
-                Button { hub.answer(request.id, .allow) } label: {
-                    HStack(spacing: 6) {
-                        Text("Allow").fontWeight(.semibold)
-                        if let k = c.combo(.allow)?.display { Text(k).font(.system(size: 10)).opacity(0.6) }
-                    }
+                if !isPlan {
+                    Button { showNote.toggle() } label: { Image(systemName: "text.bubble") }
+                        .buttonStyle(IslandButton(active: showNote))
+                        .help("Deny and tell Claude why")
                 }
-                .buttonStyle(IslandButton(prominent: true))
-                .keyboardShortcut(.defaultAction)
+                Spacer()
+                if request.risk == nil && !isPlan {
+                    Menu {
+                        Button("Allow \(request.tool) for this session") { hub.answer(request.id, .session) }
+                        Button("Always allow (\(c.alwaysTarget.label))") { hub.answer(request.id, .always) }
+                        Divider()
+                        Button("Trust this session: allow everything") { hub.answer(request.id, .trust) }
+                    } label: {
+                        Text("More").font(.system(size: 12, weight: .medium))
+                    }
+                    .menuStyle(.borderlessButton).menuIndicator(.visible).fixedSize()
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .background(Capsule().fill(look.theme.text.opacity(0.1)))
+                }
+                if request.risk != nil {
+                    HoldToAllow { hub.answer(request.id, .allow) }
+                } else {
+                    Button { hub.answer(request.id, .allow) } label: {
+                        HStack(spacing: 6) {
+                            Text(isPlan ? "Approve plan" : "Allow").fontWeight(.semibold)
+                            if let k = c.combo(.allow)?.display { Text(k).font(.system(size: 10)).opacity(0.6) }
+                        }
+                    }
+                    .buttonStyle(IslandButton(prominent: true))
+                    .keyboardShortcut(.defaultAction)
+                }
             }
         }
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(look.theme.surface).shadow(color: .black.opacity(0.3), radius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(request.risk == nil ? .clear : Mood.sad.color.opacity(0.7), lineWidth: 1.5))
         .foregroundStyle(look.theme.text)
+    }
+
+    private func deny() {
+        let note = denyNote.trimmingCharacters(in: .whitespacesAndNewlines)
+        hub.answer(request.id, .deny(note.isEmpty ? nil : note))
+    }
+}
+
+/// Allow for risky requests: press and hold, so it can't happen by accident.
+struct HoldToAllow: View {
+    let action: () -> Void
+    @Environment(\.look) private var look
+    @State private var progress: Double = 0
+    @State private var holding = false
+
+    var body: some View {
+        Text(holding ? "Keep holding…" : "Hold to allow")
+            .font(.system(size: 12, weight: .semibold))
+            .padding(.horizontal, 12).padding(.vertical, 6)
+            .background(
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Mood.sad.color.opacity(0.35))
+                    GeometryReader { g in Capsule().fill(Mood.sad.color).frame(width: g.size.width * progress) }
+                }
+                .clipShape(Capsule())
+            )
+            .foregroundStyle(.white)
+            .onLongPressGesture(minimumDuration: 1.0, perform: {
+                SystemSwitches.haptic()
+                action()
+            }, onPressingChanged: { pressing in
+                holding = pressing
+                withAnimation(pressing ? .linear(duration: 1.0) : .easeOut(duration: 0.2)) { progress = pressing ? 1 : 0 }
+            })
+            .help("Flagged as risky: press and hold for a second to allow")
+    }
+}
+
+/// Renders a plan or reply: headings, bullets and inline Markdown.
+struct MarkdownBlock: View {
+    let text: String
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(Array(text.components(separatedBy: "\n").enumerated()), id: \.offset) { _, raw in
+                let line = raw.trimmingCharacters(in: .whitespaces)
+                if line.hasPrefix("#") {
+                    let level = line.prefix(while: { $0 == "#" }).count
+                    inline(String(line.dropFirst(level)).trimmingCharacters(in: .whitespaces))
+                        .font(.system(size: level == 1 ? 15 : level == 2 ? 13.5 : 12.5, weight: .semibold))
+                        .padding(.top, 4)
+                } else if line.hasPrefix("- ") || line.hasPrefix("* ") {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text("•")
+                        inline(String(line.dropFirst(2)))
+                    }
+                    .font(.system(size: 12))
+                    .padding(.leading, CGFloat(raw.prefix(while: { $0 == " " }).count) * 4)
+                } else if !line.isEmpty {
+                    inline(line).font(.system(size: 12))
+                }
+            }
+        }
+    }
+
+    private func inline(_ s: String) -> Text {
+        Text((try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(s))
     }
 }
 

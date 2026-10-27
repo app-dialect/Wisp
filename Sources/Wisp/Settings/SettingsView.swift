@@ -99,6 +99,15 @@ private struct GeneralPage: View {
                 }
                 Slider(value: $prefs.c.closeDelay, in: 0.1...2, step: 0.05) { Text("Close after leaving") } minimumValueLabel: { Text("fast") } maximumValueLabel: { Text("slow") }
                 Toggle("Trackpad haptics", isOn: $prefs.c.haptics)
+                Toggle("Step aside for full-screen apps (unless an agent needs you)", isOn: $prefs.c.hideInFullScreen)
+            }
+            Section("Heads-ups") {
+                Toggle("Charging and low battery", isOn: $prefs.c.powerAlerts)
+                Toggle("Finished downloads", isOn: $prefs.c.downloadAlerts)
+                if prefs.c.downloadAlerts {
+                    Toggle("Put new downloads on the shelf", isOn: $prefs.c.downloadsToShelf)
+                    Text("macOS asks once for access to your Downloads folder.").font(.caption).foregroundStyle(.secondary)
+                }
             }
             Section("Your settings") {
                 HStack {
@@ -370,8 +379,9 @@ private struct WispPage: View {
 
 private struct ClaudePage: View {
     @EnvironmentObject private var prefs: Prefs
-    @State private var status = ClaudeConnector.status()
-    @State private var previewConnect: Bool?
+    @ObservedObject private var hub = ClaudeHub.shared
+    @State private var refresh = 0
+    @State private var sheet: ConnectChoice?
     @State private var message: String?
     @State private var newTool = "Bash"
     @State private var newPattern = ""
@@ -379,23 +389,28 @@ private struct ClaudePage: View {
     var body: some View {
         Form {
             Section {
-                HStack {
-                    Image(systemName: status == .connected ? "checkmark.seal.fill" : "bolt.horizontal.circle")
-                        .font(.title2).foregroundStyle(status == .connected ? .green : .orange)
-                    VStack(alignment: .leading) {
-                        Text(status == .connected ? "Connected" : status == .partial ? "Partly connected" : "Not connected").font(.headline)
-                        Text("Hook in ~/.claude/settings.json · script in Wisp's data folder").font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    if status != .disconnected { Button("Disconnect…") { previewConnect = false } }
-                    Button(status == .connected ? "Reconnect…" : "Connect…") { previewConnect = true }.buttonStyle(.borderedProminent)
+                AgentRow(target: .claude, refresh: refresh) { sheet = ConnectChoice(target: .claude, connect: $0) }
+                if ClaudeConnector.Target.codex.isInstalled {
+                    AgentRow(target: .codex, refresh: refresh) { sheet = ConnectChoice(target: .codex, connect: $0) }
                 }
                 if let message { Text(message).font(.caption).foregroundStyle(.secondary).textSelection(.enabled) }
-                Toggle("Listen to Claude Code", isOn: $prefs.c.claudeEnabled)
-                Text("If Wisp is closed, Claude Code just asks in the terminal as always.").font(.caption).foregroundStyle(.secondary)
+                Toggle("Listen to coding agents", isOn: $prefs.c.claudeEnabled)
+                Text("If Wisp is closed, your agents just ask in the terminal as always.").font(.caption).foregroundStyle(.secondary)
+            }
+            Section("Plan usage") {
+                LabeledContent("Status line bridge", value: ClaudeConnector.statusLineConnected ? "On" : "Off (turn it on when you connect)")
+                if let f = hub.usage.fiveHour { LabeledContent("5-hour window", value: "\(Int(f.percent))% used" + (f.resetsAt.map { " · resets in \($0.timeIntervalSinceNow.short)" } ?? "")) }
+                if let w = hub.usage.sevenDay { LabeledContent("Weekly", value: "\(Int(w.percent))% used" + (w.resetsAt.map { " · resets in \($0.timeIntervalSinceNow.short)" } ?? "")) }
+                Stepper("Warn me at \(prefs.c.usageWarn)% of a limit (and at 95%)", value: $prefs.c.usageWarn, in: 50...95, step: 5)
+                Stepper("Warn when a session's context is \(prefs.c.contextWarn)% full", value: $prefs.c.contextWarn, in: 50...95, step: 5)
+                Text("Claude Code hands the status line your 5-hour and weekly limits (Pro and Max plans), the model, context and cost. Wisp reads them there, on your Mac, and keeps any status line you already had.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Section("Permissions") {
                 Toggle("Open the island when Claude needs you", isOn: $prefs.c.openOnPermission)
+                Toggle("Guard risky commands (rm -rf, force-push, DROP TABLE, sudo…)", isOn: $prefs.c.riskGuard)
+                Text("Risky requests are never auto-allowed, can't be approved with a shortcut, and need a press-and-hold on Allow.")
+                    .font(.caption).foregroundStyle(.secondary)
                 Slider(value: $prefs.c.permissionTimeout, in: 15...600, step: 15) {
                     Text("Hand back to the terminal after \(Int(prefs.c.permissionTimeout))s")
                 }
@@ -437,32 +452,62 @@ private struct ClaudePage: View {
                 }
             }
         }
-        .sheet(item: Binding(get: { previewConnect.map { ConnectChoice(connect: $0) } }, set: { previewConnect = $0?.connect })) { choice in
-            ConnectSheet(connect: choice.connect) { result in
+        .sheet(item: $sheet) { choice in
+            ConnectSheet(target: choice.target, connect: choice.connect) { result in
                 message = result
-                status = ClaudeConnector.status()
-                previewConnect = nil
+                refresh += 1
+                sheet = nil
             }
         }
-        .onAppear { status = ClaudeConnector.status() }
     }
 }
 
-private struct ConnectChoice: Identifiable { let connect: Bool; var id: Bool { connect } }
+private struct AgentRow: View {
+    let target: ClaudeConnector.Target
+    let refresh: Int
+    let open: (Bool) -> Void
+    var body: some View {
+        let status = ClaudeConnector.status(target)
+        HStack {
+            Image(systemName: status == .connected ? "checkmark.seal.fill" : "bolt.horizontal.circle")
+                .font(.title2).foregroundStyle(status == .connected ? .green : .orange)
+            VStack(alignment: .leading) {
+                Text("\(target.name): " + (status == .connected ? "connected" : status == .partial ? "partly connected" : "not connected")).font(.headline)
+                Text("Hook in \(Paths.pretty(target.file.path))").font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            if status != .disconnected { Button("Disconnect…") { open(false) } }
+            Button(status == .connected ? "Reconnect…" : "Connect…") { open(true) }.buttonStyle(.borderedProminent)
+        }
+        .id(refresh)
+    }
+}
+
+private struct ConnectChoice: Identifiable {
+    let target: ClaudeConnector.Target
+    let connect: Bool
+    var id: String { target.name + "\(connect)" }
+}
 
 private struct ConnectSheet: View {
+    let target: ClaudeConnector.Target
     let connect: Bool
     let done: (String?) -> Void
+    @State private var statusLine = true
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(connect ? "Connect Claude Code" : "Disconnect Claude Code").font(.title2.weight(.semibold))
+            Text(connect ? "Connect \(target.name)" : "Disconnect \(target.name)").font(.title2.weight(.semibold))
             Text(connect
-                 ? "Wisp will copy its hook script to ~/Library/Application Support/Wisp and add it to these events in ~/.claude/settings.json. Your other settings stay as they are; a dated backup is saved next to the file. Key order and spacing in the file may change."
-                 : "Wisp will remove only its own entries from ~/.claude/settings.json. A dated backup is saved first.")
+                 ? "Wisp will copy its hook script to ~/Library/Application Support/Wisp and add it to these events in \(Paths.pretty(target.file.path)). Your other settings stay as they are; a dated backup is saved next to the file. Key order and spacing in the file may change."
+                 : "Wisp will remove only its own entries from \(Paths.pretty(target.file.path)) and give back any status line you had before. A dated backup is saved first.")
                 .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            Text("The hooks section after this change:").font(.headline)
+            if connect && target.hasStatusLine {
+                Toggle("Also show plan usage, model, context and cost (routes the status line through Wisp; an existing one keeps working)", isOn: $statusLine)
+            }
+            Text("After this change:").font(.headline)
             ScrollView {
-                Text(ClaudeConnector.preview(connect: connect))
+                Text(ClaudeConnector.preview(target, connect: connect, statusLine: statusLine))
                     .font(.system(size: 11, design: .monospaced)).textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(8)
             }
@@ -472,8 +517,8 @@ private struct ConnectSheet: View {
                 Button("Cancel") { done(nil) }.keyboardShortcut(.cancelAction)
                 Button(connect ? "Connect" : "Disconnect") {
                     do {
-                        let backup = try ClaudeConnector.apply(connect: connect)
-                        done((connect ? "Connected. " : "Disconnected. ") + (backup.map { "Backup: \(Paths.pretty($0.path))" } ?? "") + (connect ? " New Claude Code sessions will show up in the notch." : ""))
+                        let backup = try ClaudeConnector.apply(target, connect: connect, statusLine: statusLine)
+                        done((connect ? "Connected. " : "Disconnected. ") + (backup.map { "Backup: \(Paths.pretty($0.path))" } ?? "") + (connect ? " New \(target.name) sessions will show up in the notch." : ""))
                     } catch {
                         done("Couldn't write the file: \(error.localizedDescription)")
                     }
@@ -482,7 +527,7 @@ private struct ConnectSheet: View {
             }
         }
         .padding(20)
-        .frame(width: 620, height: 520)
+        .frame(width: 640, height: 560)
     }
 }
 
@@ -517,6 +562,11 @@ private struct TilesPage: View {
                     }
                 }
                 Text("Drag to reorder. You can also edit tiles right in the island with the sliders button.").font(.caption).foregroundStyle(.secondary)
+            }
+            Section("Music") {
+                Toggle("Synced lyrics", isOn: $prefs.c.lyrics)
+                Text("Lyrics come from lrclib.net, which gets the song's title, artist, album and length. Pick “Synced lyrics” for a wing to see them beside the camera.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Section("Focus timer") {
                 Stepper("Focus: \(prefs.c.focusMinutes) min", value: $prefs.c.focusMinutes, in: 5...120, step: 5)
