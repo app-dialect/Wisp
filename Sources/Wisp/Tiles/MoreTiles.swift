@@ -13,7 +13,7 @@ struct UsageTile: View {
         VStack(alignment: .leading, spacing: 6) {
             TileTitle(text: "Claude plan", symbol: "gauge.with.dots.needle.33percent")
             if u.isKnown {
-                HStack(spacing: 14) {
+                HStack(spacing: 8) {
                     gauge("5 hours", u.fiveHour)
                     if span > 1 { gauge("Week", u.sevenDay) }
                 }
@@ -33,19 +33,17 @@ struct UsageTile: View {
     private func gauge(_ label: String, _ w: PlanUsage.Window?) -> some View {
         let pct = w?.percent ?? 0
         let color: Color = pct >= 95 ? Mood.sad.color : pct >= 80 ? Mood.attention.color : look.accent
-        HStack(spacing: 8) {
+        VStack(spacing: 4) {
             ZStack {
                 Ring(progress: pct / 100, color: color, line: 5)
                 Text(w == nil ? "–" : "\(Int(pct))%").font(.system(size: 12, weight: .semibold)).monospacedDigit()
             }
             .frame(width: 48, height: 48)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label).font(.system(size: 11, weight: .medium))
-                if let r = w?.resetsAt {
-                    Text("resets in \(r.timeIntervalSinceNow.short)").font(.system(size: 9)).foregroundStyle(look.theme.secondary)
-                }
-            }
+            Text(label).font(.system(size: 11, weight: .medium)).lineLimit(1)
+            Text(w?.resetsAt.map { "resets in \($0.timeIntervalSinceNow.short)" } ?? " ")
+                .font(.system(size: 9)).foregroundStyle(look.theme.secondary).lineLimit(1)
         }
+        .frame(maxWidth: .infinity)
     }
 }
 

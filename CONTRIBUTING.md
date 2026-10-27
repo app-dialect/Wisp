@@ -18,7 +18,7 @@ macOS 14+ and the Xcode Command Line Tools. No Xcode project, no dependencies.
 2. Write a `View` with `let span: Int` in `Sources/Wisp/Tiles/TileViews.swift`. Copy `ProgressTile` for the shape.
 3. Add it to the `switch` in `TileContent`.
 4. If it polls something, give its service a `setActive(_:)` and switch it on in `AppDelegate.apply(_:)` only when the tile is in use.
-5. `./build.sh`, add the tile from the island's edit mode, and open a PR with a screenshot.
+5. `./build.sh`, add the tile from the island's edit mode, and open a PR with a screenshot. `.build/debug/Wisp --demo home` gives you made-up data, so nothing personal ends up in it.
 
 ## Guidelines
 

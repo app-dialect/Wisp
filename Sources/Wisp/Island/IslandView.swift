@@ -183,6 +183,10 @@ struct ExpandedView: View {
             .padding(.horizontal, 14)
             .padding(.bottom, 12)
             .padding(.top, 6)
+            // The panel never becomes key, so system text and controls would follow the
+            // Mac's light/dark setting instead of the theme without this.
+            .foregroundStyle(look.theme.text)
+            .environment(\.colorScheme, look.theme.isDark ? .dark : .light)
         }
     }
 

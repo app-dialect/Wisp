@@ -4,7 +4,7 @@ enum Paths {
     /// ~/Library/Application Support/Wisp. Everything Wisp writes lives here.
     static let support: URL = {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let dir = base.appendingPathComponent("Wisp", isDirectory: true)
+        let dir = base.appendingPathComponent(Demo.isOn ? "Wisp Demo" : "Wisp", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }()
@@ -34,6 +34,7 @@ extension TimeInterval {
     var short: String {
         let s = Int(self)
         if s < 60 { return "\(s)s" }
+        if s >= 86400 { return (s % 86400) / 3600 == 0 ? "\(s / 86400)d" : "\(s / 86400)d \((s % 86400) / 3600)h" }
         if s < 3600 { return "\(s / 60)m" }
         let m = (s % 3600) / 60
         return m == 0 ? "\(s / 3600)h" : "\(s / 3600)h \(m)m"

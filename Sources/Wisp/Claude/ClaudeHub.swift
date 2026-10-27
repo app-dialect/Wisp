@@ -40,6 +40,13 @@ final class ClaudeHub: ObservableObject {
 
     func start() { server.start() }
     var needsYou: Bool { !pending.isEmpty || !questions.isEmpty }
+    /// A short command fits the normal island; anything bigger gets a little more height.
+    var needsRoom: Bool {
+        if let p = pending.first {
+            return p.plan != nil || p.detail.count > 160 || p.detail.split(separator: "\n").count > 3
+        }
+        return !questions.isEmpty
+    }
 
     func stop() {
         for p in pending { p.reply(["behavior": "ask"]) }
@@ -161,7 +168,7 @@ final class ClaudeHub: ObservableObject {
 
     // MARK: - Events
 
-    private func handle(_ e: [String: Any], reply: HookServer.Reply?) {
+    func handle(_ e: [String: Any], reply: HookServer.Reply?) {
         guard prefs.claudeEnabled else { reply?(["behavior": "ask"]); return }
         let name = e["hook_event_name"] as? String ?? ""
         let id = e["session_id"] as? String ?? "unknown"

@@ -21,8 +21,9 @@ All notable changes to Wisp are documented here. The format follows [Keep a Chan
 - Claude's `AskUserQuestion` prompts answered from the notch.
 - One-click connect with a preview and a dated backup of `~/.claude/settings.json`.
 - The wisp: 6 shapes, 9 moods, 10 outfits with seasonal dressing, 3 personalities, eyes that follow the pointer, poke and dizzy reactions, desktop buddy mode.
-- 14 tiles with an in-island edit mode.
+- 18 tiles with an in-island edit mode.
 - 10 themes, custom accent, frosted glass, 4 typefaces, motion presets, shareable look codes, settings import and export.
 - 5 synthesized sound packs and custom sound files.
 - Re-recordable global shortcuts.
 - Weekly recap with a shareable image.
+- `Wisp --demo <scene>` fills the island with made-up sessions for screenshots, using its own data folder.

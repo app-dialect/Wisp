@@ -328,8 +328,10 @@ struct TodoTile: View {
             HStack {
                 TileTitle(text: "To-do", symbol: "checklist")
                 if prefs.c.todos.contains(where: \.done) {
-                    Button("Clear done") { prefs.c.todos.removeAll(where: \.done) }
-                        .buttonStyle(.plain).font(.system(size: 9)).foregroundStyle(look.theme.secondary)
+                    Button { prefs.c.todos.removeAll(where: \.done) } label: {
+                        if span > 1 { Text("Clear done") } else { Image(systemName: "trash") }
+                    }
+                    .buttonStyle(.plain).font(.system(size: 9)).foregroundStyle(look.theme.secondary).help("Clear done")
                 }
             }
             ScrollView {

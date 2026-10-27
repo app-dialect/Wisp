@@ -6,12 +6,23 @@
 
 **A little spirit that lives in your Mac's notch and keeps an eye on Claude Code.**
 
+[![Download beta](https://img.shields.io/github/v/release/app-dialect/Wisp?include_prereleases&label=download&color=FF8A3D)](https://github.com/app-dialect/Wisp/releases)
+[![Downloads](https://img.shields.io/github/downloads/app-dialect/Wisp/total?color=34C759)](https://github.com/app-dialect/Wisp/releases)
+[![Stars](https://img.shields.io/github/stars/app-dialect/Wisp?style=flat&color=FFCC00)](https://github.com/app-dialect/Wisp/stargazers)
+[![CI](https://github.com/app-dialect/Wisp/actions/workflows/ci.yml/badge.svg)](https://github.com/app-dialect/Wisp/actions/workflows/ci.yml)
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-111?logo=apple)
 ![Swift](https://img.shields.io/badge/Swift-SwiftUI-F05138?logo=swift&logoColor=white)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-![Status: beta](https://img.shields.io/badge/status-beta-orange)
+![Status: public beta](https://img.shields.io/badge/status-public%20beta-orange)
 
-[Features](#-features) · [Install](#-install) · [Make it yours](#-make-it-yours) · [Privacy](#-privacy) · [Contribute](#-contributing)
+[**⬇️ Download the beta**](https://github.com/app-dialect/Wisp/releases) · [Features](#-features) · [Install](#-install) · [Make it yours](#-make-it-yours) · [Privacy](#-privacy) · [Contribute](#-contributing)
+
+<br>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-dark.png">
+  <img src="docs/images/hero-light.png" alt="Wisp grown out of the MacBook notch, asking whether Claude Code may run npm run test, with Deny, More and Allow buttons" width="100%">
+</picture>
 
 </div>
 
@@ -22,7 +33,7 @@ Claude Code is great until it stops to ask *"can I run this?"* while you're in a
 And it's a little character: a wisp that thinks when Claude thinks, bounces when it needs you, celebrates when it's done, falls asleep when it's quiet, and wears a witch hat in late October.
 
 > [!NOTE]
-> **Wisp is in beta.** It's a daily driver, but expect rough edges. [Report anything odd](../../issues/new/choose).
+> **Wisp is in public beta.** It's a daily driver, but expect rough edges. [Report anything odd](https://github.com/app-dialect/Wisp/issues/new/choose).
 
 ## ✨ Why Wisp
 
@@ -35,10 +46,18 @@ And it's a little character: a wisp that thinks when Claude thinks, bounces when
 | 🤝 **Claude Code and Codex** | Both speak the same hooks; connect either or both. |
 | 🔥 **A real character** | Six shapes, nine moods, ten outfits, three personalities. Its eyes follow your pointer. Poke it. Poke it five times. |
 | 🎨 **Customize everything** | 10 themes plus any accent, 4 typefaces, notch or floating island, size, corners, motion, glow, glass, what sits beside the camera, every sound, every shortcut. Share your look as a code. |
-| 🧩 **14 tiles** | Music, next meeting with Join, weather, focus timer, clipboard, file shelf, to-do, world clock, system, day progress, switches, a weekly recap and more. |
+| 🧩 **18 tiles** | Music, next meeting with Join, weather, focus timer, clipboard, file shelf, to-do, world clock, system, day progress, switches, a weekly recap and more. |
 | 🫥 **Out of the way** | Black on black inside the notch until something happens. Hover to open, move away to close. |
 | 🔒 **Private** | No account, no analytics. Two optional network calls, both [listed below](#-privacy). |
 | 🛠 **Hackable** | Plain SwiftPM, no Xcode project. Open it in Claude Code and type `/make-it-mine`. |
+
+## 👀 A look around
+
+| | |
+|---|---|
+| <img src="docs/images/sessions.png" alt="The Claude tab: three sessions on the left, the live step timeline of rocket-app on the right, with model and context in the header"> **Every session, live.** Steps, files changed, Claude's last reply. | <img src="docs/images/plan.png" alt="A plan card with a rendered Markdown plan and Approve plan / Keep planning buttons"> **Review plans** as formatted Markdown before Claude starts. |
+| <img src="docs/images/risk.png" alt="A red-bordered card warning that git push --force can rewrite shared history, with a Hold to allow button"> **Risky commands** get a warning and a press-and-hold. | <img src="docs/images/question.png" alt="Claude asking which database to use, with Postgres, SQLite and DynamoDB chips"> **Claude's questions** as chips you click. |
+| <img src="docs/images/home.png" alt="Home tiles: Claude Code status, plan usage rings at 62% and 38%, a focus timer and a to-do list"> **Tiles** for plan usage, music, meetings, timers and more. | <img src="docs/images/peek.png" alt="The closed notch with the wisp on the left and 'rocket-app is done' on the right"> **Peeks** slide out of the notch when something happens. |
 
 ## 🧩 Features
 

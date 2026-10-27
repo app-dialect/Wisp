@@ -43,8 +43,8 @@ final class IslandModel: ObservableObject {
     func topOffset(_ c: Config) -> CGFloat { c.style == .notch ? 0 : menuBarHeight + 6 }
 
     func expandedSize(_ c: Config) -> CGSize {
-        // Grow a little while Claude is waiting on a card, so questions and commands fit.
-        let extra: CGFloat = ClaudeHub.shared.needsYou ? 84 : 0
+        // Grow a little while a card needs the room: questions, plans, warnings, long commands.
+        let extra: CGFloat = ClaudeHub.shared.needsRoom ? 84 : 0
         return CGSize(width: max(c.islandWidth, notch.width + 260), height: c.islandHeight + headerHeight(c) + extra)
     }
 
@@ -63,7 +63,7 @@ final class IslandModel: ObservableObject {
     /// The largest the island ever gets, so the window can be sized once.
     func maxSize(_ c: Config) -> CGSize {
         let e = expandedSize(c)
-        let tall = e.height + (ClaudeHub.shared.needsYou ? 0 : 84)
+        let tall = e.height + (ClaudeHub.shared.needsRoom ? 0 : 84)
         let w = collapsedSize(c, wings: true)
         return CGSize(width: max(e.width, w.width + 70), height: tall + topOffset(c))
     }

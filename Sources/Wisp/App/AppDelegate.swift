@@ -21,7 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         island.model.openSettings = { [weak self] in self?.openSettings() }
         buddy.onOpenIsland = { [weak self] in self?.island.expand(sticky: true) }
 
-        ClaudeConnector.refreshScriptIfConnected()
+        if !Demo.isOn { ClaudeConnector.refreshScriptIfConnected() }
         wireClaude()
         wireTimer()
         wireSystem()
@@ -39,6 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } else if prefs.c.greetOnLaunch {
             greet()
         }
+        Demo.run(island)
     }
 
     func applicationWillTerminate(_ note: Notification) {

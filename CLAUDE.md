@@ -7,6 +7,7 @@ You are helping someone change Wisp, a macOS notch app (Swift, AppKit + SwiftUI,
 - Needs macOS 14+ and the Command Line Tools. New `.swift` files under `Sources/Wisp/` compile automatically.
 - After every change, build and fix errors before saying you're done. Then tell the person to quit Wisp and open the new build.
 - `Wisp --render-icon <dir.iconset>` renders the icon from the mascot code (`App/IconRenderer.swift`).
+- `.build/debug/Wisp --demo <scene>` (claude, sessions, risk, plan, question, home, peek) opens Wisp with made-up sessions for screenshots (`App/Demo.swift`). It uses its own data folder and never saves settings; quit the real Wisp first.
 
 ## Where things are
 | You want to change | Look in |

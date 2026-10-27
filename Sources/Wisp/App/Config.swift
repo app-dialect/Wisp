@@ -338,10 +338,11 @@ final class Prefs: ObservableObject {
     }
 
     private init() {
-        c = Prefs.load(from: UserDefaults.standard.data(forKey: Prefs.key)) ?? Config()
+        c = Demo.isOn ? Demo.config : Prefs.load(from: UserDefaults.standard.data(forKey: Prefs.key)) ?? Config()
     }
 
     private func save() {
+        guard !Demo.isOn else { return }
         if let data = try? JSONEncoder().encode(c) {
             UserDefaults.standard.set(data, forKey: Prefs.key)
         }
