@@ -98,7 +98,9 @@ Tiles come in three widths. Rearrange them in Settings, or right in the island: 
 
 ## 📦 Install
 
-You need macOS 14 or later and the Xcode Command Line Tools.
+**Download:** grab `Wisp-0.1.0.dmg` from [Releases](https://github.com/app-dialect/Wisp/releases) and drag Wisp to Applications. The beta isn't notarized yet, so the first time, right-click Wisp and choose **Open** (or allow it in System Settings → Privacy & Security).
+
+**Build it yourself:** you need macOS 14 or later and the Xcode Command Line Tools.
 
 ```bash
 xcode-select --install     # once, if you don't have them
