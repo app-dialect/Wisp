@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build (universal)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+      - name: Swift version
+        run: swift --version
+      - name: Build arm64
+        run: swift build -c release --triple arm64-apple-macosx14.0
+      - name: Build x86_64
+        run: swift build -c release --triple x86_64-apple-macosx14.0
+      - name: Check the hook script
+        run: python3 -m py_compile Resources/wisp-hook.py

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Questions & ideas
+    url: https://github.com/app-dialect/Wisp/discussions
+    about: Ask questions, share your setup, and chat with other Wisp users.
+  - name: 🔒 Report a security issue
+    url: https://github.com/app-dialect/Wisp/security/advisories/new
+    about: Please report vulnerabilities privately.

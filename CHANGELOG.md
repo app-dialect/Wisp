@@ -1,0 +1,20 @@
+# Changelog
+
+All notable changes to Wisp are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Wisp uses [Semantic Versioning](https://semver.org/).
+
+## [Unreleased]
+
+## [0.1.0-beta] - 2026-10-27
+
+### Added
+- The island: grows out of the notch (or floats under the menu bar), opens on hover or click, configurable wings beside the camera, peeks, confetti.
+- Claude Code: live sessions, step timeline, files changed with diffs, last reply, tokens, jump to terminal.
+- Permissions from the notch: Allow, Always (saved to Claude Code or Wisp), Deny, Deny with a note, answer in terminal, countdown with terminal fallback.
+- Claude's `AskUserQuestion` prompts answered from the notch.
+- One-click connect with a preview and a dated backup of `~/.claude/settings.json`.
+- The wisp: 6 shapes, 9 moods, 10 outfits with seasonal dressing, 3 personalities, eyes that follow the pointer, poke and dizzy reactions, desktop buddy mode.
+- 14 tiles with an in-island edit mode.
+- 10 themes, custom accent, frosted glass, 4 typefaces, motion presets, shareable look codes, settings import and export.
+- 5 synthesized sound packs and custom sound files.
+- Re-recordable global shortcuts.
+- Weekly recap with a shareable image.
